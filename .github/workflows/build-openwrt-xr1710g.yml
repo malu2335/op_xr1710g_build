@@ -45,7 +45,7 @@ permissions:
 
 concurrency:
   group: openwrt-xr1710g-${{ github.ref }}-${{ inputs.openwrt_ref || 'xr1710g' }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   SOURCE_DIR: openwrt
@@ -73,8 +73,8 @@ jobs:
       - name: Free runner disk space
         run: |
           set -eux
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
-          docker system prune -af || true
+          timeout 180s sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          timeout 60s docker system prune -af || true
           df -h
 
       - name: Install build dependencies
