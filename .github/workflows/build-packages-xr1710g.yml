@@ -297,6 +297,12 @@ jobs:
           set -eux
           git clone --depth 1 https://github.com/vernesong/OpenClash.git package/OpenClash
 
+      - name: Add W1700K fancontrol package
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          git clone --depth 1 https://github.com/rchen14b/luci-app-w1700k-fancontrol.git package/luci-app-w1700k-fancontrol
+
       - name: Write package build config
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
@@ -317,7 +323,10 @@ jobs:
           CONFIG_KERNEL_BUILD_DOMAIN="github-actions"
           CONFIG_KERNEL_BUILD_USER="builder"
           # CONFIG_PACKAGE_dnsmasq is not set
+          CONFIG_PACKAGE_luci-app-airoha-npu=y
           CONFIG_PACKAGE_luci-app-openclash=y
+          CONFIG_PACKAGE_luci-app-mlo=y
+          CONFIG_PACKAGE_luci-app-w1700k-fancontrol=y
           CONFIG_PACKAGE_luci-compat=y
           CONFIG_PACKAGE_dnsmasq-full=y
           # CONFIG_TARGET_ROOTFS_INITRAMFS is not set
@@ -329,6 +338,37 @@ jobs:
 
           grep -q "^CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_${profile}=y$" .config
           make defconfig
+          for pkg in luci-app-openclash luci-app-mlo luci-app-airoha-npu luci-app-w1700k-fancontrol; do
+            grep -q "^CONFIG_PACKAGE_${pkg}=y$" .config || {
+              echo "Required package was not selected by OpenWrt Kconfig: ${pkg}"
+              exit 1
+            }
+          done
+
+      - name: Compile required LuCI packages
+        if: ${{ matrix.shard == 0 }}
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eu
+          for pkg in luci-app-openclash luci-app-mlo luci-app-airoha-npu luci-app-w1700k-fancontrol; do
+            pkgdir="$(
+              find package -name Makefile -type f -print0 \
+                | xargs -0 grep -El "^define Package/${pkg}([[:space:]]|$)" \
+                | sed 's#/Makefile$##' \
+                | sort \
+                | head -n 1 \
+                || true
+            )"
+
+            if [ -z "${pkgdir}" ]; then
+              echo "Required package Makefile was not found: ${pkg}"
+              exit 1
+            fi
+
+            echo "::group::required ${pkgdir}"
+            make -j"$(nproc)" "${pkgdir}/compile" IGNORE_ERRORS=m || make -j1 V=s "${pkgdir}/compile" IGNORE_ERRORS=m
+            echo "::endgroup::"
+          done
 
       - name: Compile assigned packages
         working-directory: ${{ env.SOURCE_DIR }}

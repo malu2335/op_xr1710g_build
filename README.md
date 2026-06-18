@@ -30,8 +30,10 @@ The expected system firmware artifact is the `*-sysupgrade.itb` file. For XR1710
 ## Notes
 
 - Do the OpenWrt source checkout and build on the Ubuntu runner. Avoid cloning the full OpenWrt tree on macOS case-insensitive filesystems.
-- The workflow enables OpenWrt buildbot-style package output with `CONFIG_ALL`, `CONFIG_ALL_KMODS`, and `CONFIG_ALL_NONSHARED`.
+- The packages workflow enables OpenWrt buildbot-style package output with `CONFIG_ALL`, `CONFIG_ALL_KMODS`, and `CONFIG_ALL_NONSHARED`.
 - OpenClash is added from <https://github.com/vernesong/OpenClash> and selected into the firmware as `luci-app-openclash`.
+- The default config requires `luci-app-openclash`, `luci-app-mlo`, `luci-app-airoha-npu`, and `luci-app-w1700k-fancontrol`.
+- W1700K fan control is added from <https://github.com/rchen14b/luci-app-w1700k-fancontrol>.
 - Firmware release titles use `路由器固件 <build time>`. Toolchain release titles use `toolchain <build time>`.
 - `actions/cache` cache misses and Node runtime deprecation messages are runner warnings, not build failures.
 - OpenWrt dependency warnings from package Makefiles are expected when all packages are scanned. The actual failure signal is a later `ERROR` or failed workflow step.

@@ -322,6 +322,12 @@ jobs:
           set -eux
           git clone --depth 1 https://github.com/vernesong/OpenClash.git package/OpenClash
 
+      - name: Add W1700K fancontrol package
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          git clone --depth 1 https://github.com/rchen14b/luci-app-w1700k-fancontrol.git package/luci-app-w1700k-fancontrol
+
       - name: Add XR1710G first-boot defaults
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
@@ -385,11 +391,14 @@ jobs:
           CONFIG_PACKAGE_jq=y
           CONFIG_PACKAGE_curl=y
           CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-app-airoha-npu=y
           CONFIG_PACKAGE_luci-app-openclash=y
           CONFIG_PACKAGE_luci-app-firewall=y
+          CONFIG_PACKAGE_luci-app-mlo=y
           CONFIG_PACKAGE_luci-app-package-manager=y
           CONFIG_PACKAGE_luci-app-ttyd=y
           CONFIG_PACKAGE_luci-app-irqbalance=y
+          CONFIG_PACKAGE_luci-app-w1700k-fancontrol=y
           CONFIG_PACKAGE_luci-compat=y
           CONFIG_PACKAGE_luci-proto-ipv6=y
           CONFIG_PACKAGE_luci-proto-ppp=y
@@ -417,6 +426,12 @@ jobs:
             grep "^CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_" .config || true
             exit 1
           }
+          for pkg in luci-app-openclash luci-app-mlo luci-app-airoha-npu luci-app-w1700k-fancontrol; do
+            grep -q "^CONFIG_PACKAGE_${pkg}=y$" .config || {
+              echo "Required package was not selected by OpenWrt Kconfig: ${pkg}"
+              exit 1
+            }
+          done
 
       - name: Download package sources
         working-directory: ${{ env.SOURCE_DIR }}
