@@ -237,7 +237,7 @@ jobs:
           rm -rf "${support_dir}"
           git clone --depth 1 --filter=blob:none --sparse --branch xr1710g \
             https://github.com/YYH2913/openwrt.git "${support_dir}"
-          git -C "${support_dir}" sparse-checkout set \
+          git -C "${support_dir}" sparse-checkout set --no-cone \
             target/linux/airoha/image/an7581.mk \
             target/linux/airoha/dts/an7581-xr1710g-ubi.dts \
             target/linux/airoha/an7581/base-files
