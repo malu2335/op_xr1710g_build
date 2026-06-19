@@ -161,8 +161,13 @@ jobs:
           set -eux
           libffi_makefile="feeds/packages/libs/libffi/Makefile"
           if [ -f "${libffi_makefile}" ]; then
-            perl -0pi -e 's#^[ \t]*\$\(CP\) .*/fficonfig\.h .*$#\t\$(CP) \$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit) \$(1)/usr/include/#m' "${libffi_makefile}"
-            grep -n 'fficonfig.h' "${libffi_makefile}"
+            perl -0pi -e 's#^[ \t]*\$\(CP\)[ \t]*\\\n[ \t]*\$\(PKG_BUILD_DIR\)/\$\(GNU_TARGET_NAME\)\*/fficonfig\.h[ \t]*\\\n[ \t]*\$\(1\)/usr/include/#\t\$(CP) \$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit) \$(1)/usr/include/#ms; s#^[ \t]*\$\(CP\) .*/fficonfig\.h .*$#\t\$(CP) \$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit) \$(1)/usr/include/#m' "${libffi_makefile}"
+            if grep -Fq '$(GNU_TARGET_NAME)*/fficonfig.h' "${libffi_makefile}"; then
+              echo "libffi fficonfig.h lookup was not patched"
+              sed -n '70,85p' "${libffi_makefile}"
+              exit 1
+            fi
+            grep -n -A2 -B2 'fficonfig.h' "${libffi_makefile}"
           fi
 
       - name: Add OpenClash package
