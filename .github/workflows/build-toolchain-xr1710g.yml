@@ -11,13 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       openwrt_repo:
-        description: OpenWrt source repository
+        description: OpenWrt/ImmortalWrt source repository
         required: true
-        default: https://github.com/YYH2913/openwrt.git
+        default: https://github.com/immortalwrt/immortalwrt.git
       openwrt_ref:
         description: OpenWrt branch, tag, or commit
         required: true
-        default: xr1710g
+        default: master
       target_profile:
         description: OpenWrt device profile
         required: true
@@ -43,8 +43,8 @@ env:
   SOURCE_DIR: openwrt
   TARGET: airoha
   SUBTARGET: an7581
-  OPENWRT_REPO: ${{ inputs.openwrt_repo || 'https://github.com/YYH2913/openwrt.git' }}
-  OPENWRT_REF: ${{ inputs.openwrt_ref || 'xr1710g' }}
+  OPENWRT_REPO: ${{ inputs.openwrt_repo || 'https://github.com/immortalwrt/immortalwrt.git' }}
+  OPENWRT_REF: ${{ inputs.openwrt_ref || 'master' }}
   TARGET_PROFILE: ${{ inputs.target_profile || 'econet_xr1710g-ubi' }}
   EXTRA_CONFIG: ${{ inputs.extra_config || '' }}
   CREATE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.create_release) || 'true' }}
@@ -53,7 +53,7 @@ env:
 
 jobs:
   toolchain:
-    name: Toolchain ${{ inputs.target_profile || 'econet_xr1710g-ubi' }} @ ${{ inputs.openwrt_ref || 'xr1710g' }}
+    name: Toolchain ${{ inputs.target_profile || 'econet_xr1710g-ubi' }} @ ${{ inputs.openwrt_ref || 'master' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -108,6 +108,35 @@ jobs:
             printf 'cache_week=%s\n' "${cache_week}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Add XR1710G device support
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          if grep -q '^define Device/econet_xr1710g-ubi$' target/linux/airoha/image/an7581.mk; then
+            echo "XR1710G device profile already exists in source."
+            exit 0
+          fi
+
+          support_dir="${RUNNER_TEMP}/xr1710g-support"
+          rm -rf "${support_dir}"
+          git clone --depth 1 --filter=blob:none --sparse --branch xr1710g \
+            https://github.com/YYH2913/openwrt.git "${support_dir}"
+          git -C "${support_dir}" sparse-checkout set \
+            target/linux/airoha/image/an7581.mk \
+            target/linux/airoha/dts/an7581-xr1710g-ubi.dts \
+            target/linux/airoha/an7581/base-files
+
+          install -m 0644 "${support_dir}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts" target/linux/airoha/dts/
+          mkdir -p target/linux/airoha/an7581/base-files
+          cp -a "${support_dir}/target/linux/airoha/an7581/base-files/." target/linux/airoha/an7581/base-files/
+          {
+            printf '\n'
+            awk '/^define Device\/econet_xr1710g-ubi$/,/^TARGET_DEVICES \+= econet_xr1710g-ubi$/' \
+              "${support_dir}/target/linux/airoha/image/an7581.mk"
+          } >> target/linux/airoha/image/an7581.mk
+
+          grep -q '^define Device/econet_xr1710g-ubi$' target/linux/airoha/image/an7581.mk
+
       - name: Restore downloads and ccache
         uses: actions/cache@v4
         with:
@@ -130,13 +159,33 @@ jobs:
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
           set -eux
-          git clone --depth 1 https://github.com/vernesong/OpenClash.git package/OpenClash
+          if [ ! -d package/OpenClash ]; then
+            git clone --depth 1 https://github.com/vernesong/OpenClash.git package/OpenClash
+          fi
+
+      - name: Add MLO LuCI package
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          if [ ! -d package/luci-app-mlo ]; then
+            git clone --depth 1 https://github.com/YYH2913/luci-app-mlo.git package/luci-app-mlo
+          fi
+
+      - name: Add Airoha NPU LuCI package
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          if [ ! -d package/luci-app-airoha-npu ]; then
+            git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git package/luci-app-airoha-npu
+          fi
 
       - name: Add W1700K fancontrol package
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
           set -eux
-          git clone --depth 1 https://github.com/rchen14b/luci-app-w1700k-fancontrol.git package/luci-app-w1700k-fancontrol
+          if [ ! -d package/luci-app-w1700k-fancontrol ]; then
+            git clone --depth 1 https://github.com/rchen14b/luci-app-w1700k-fancontrol.git package/luci-app-w1700k-fancontrol
+          fi
 
       - name: Write toolchain build config
         working-directory: ${{ env.SOURCE_DIR }}

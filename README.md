@@ -4,8 +4,8 @@ This repository contains a GitHub Actions workflow for building OpenWrt firmware
 
 The default build source is:
 
-- OpenWrt tree: `https://github.com/YYH2913/openwrt.git`
-- Branch: `xr1710g`
+- ImmortalWrt tree: `https://github.com/immortalwrt/immortalwrt.git`
+- Branch: `master`
 - Target: `airoha/an7581`
 - Device profile: `econet_xr1710g-ubi`
 
@@ -30,9 +30,12 @@ The expected system firmware artifact is the `*-sysupgrade.itb` file. For XR1710
 ## Notes
 
 - Do the OpenWrt source checkout and build on the Ubuntu runner. Avoid cloning the full OpenWrt tree on macOS case-insensitive filesystems.
+- The main build tree defaults to ImmortalWrt. If that tree does not contain `econet_xr1710g-ubi`, the workflow imports the XR1710G device profile, DTS, and board files from `YYH2913/openwrt:xr1710g`.
 - The packages workflow enables OpenWrt buildbot-style package output with `CONFIG_ALL`, `CONFIG_ALL_KMODS`, and `CONFIG_ALL_NONSHARED`.
 - OpenClash is added from <https://github.com/vernesong/OpenClash> and selected into the firmware as `luci-app-openclash`.
 - The default config requires `luci-app-openclash`, `luci-app-mlo`, `luci-app-airoha-npu`, and `luci-app-w1700k-fancontrol`.
+- MLO LuCI is added from <https://github.com/YYH2913/luci-app-mlo>.
+- Airoha NPU LuCI is added from <https://github.com/rchen14b/luci-app-airoha-npu>.
 - W1700K fan control is added from <https://github.com/rchen14b/luci-app-w1700k-fancontrol>.
 - Firmware release titles use `路由器固件 <build time>`. Toolchain release titles use `toolchain <build time>`.
 - `actions/cache` cache misses and Node runtime deprecation messages are runner warnings, not build failures.
@@ -43,7 +46,8 @@ The expected system firmware artifact is the `*-sysupgrade.itb` file. For XR1710
 
 ## References
 
-- YYH2913 OpenWrt source: <https://github.com/YYH2913/openwrt/tree/xr1710g>
+- ImmortalWrt source: <https://github.com/immortalwrt/immortalwrt/tree/master>
+- YYH2913 XR1710G source overlay: <https://github.com/YYH2913/openwrt/tree/xr1710g>
 - W1700K UBI build workflow reference: <https://github.com/OpenWRT-fanboy/w1700k-ubi-build>
 - XR1710G U-Boot and HTTP Recovery notes: <https://github.com/YYH2913/http-uboot-xr1710g>
 - OpenWrt XR1710G PR: <https://github.com/openwrt/openwrt/pull/22397>
