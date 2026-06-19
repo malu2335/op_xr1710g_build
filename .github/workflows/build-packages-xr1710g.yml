@@ -326,7 +326,7 @@ jobs:
           set -eux
           libffi_makefile="feeds/packages/libs/libffi/Makefile"
           if [ -f "${libffi_makefile}" ]; then
-            perl -0pi -e 's#^[ \t]*\$\(CP\)[ \t]*\\\n[ \t]*\$\(PKG_BUILD_DIR\)/\$\(GNU_TARGET_NAME\)\*/fficonfig\.h[ \t]*\\\n[ \t]*\$\(1\)/usr/include/#\t\$(CP) \$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit) \$(1)/usr/include/#ms; s#^[ \t]*\$\(CP\) .*/fficonfig\.h .*$#\t\$(CP) \$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit) \$(1)/usr/include/#m' "${libffi_makefile}"
+            perl -0pi -e 's#^[ \t]*\$\(CP\)[ \t]*\\\n[ \t]*\$\(PKG_BUILD_DIR\)/\$\(GNU_TARGET_NAME\)\*/fficonfig\.h[ \t]*\\\n[ \t]*\$\(1\)/usr/include/#\tfficonfig="\$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit)"; [ -z "\$\$fficonfig" ] || \$(CP) "\$\$fficonfig" \$(1)/usr/include/#ms; s#^[ \t]*\$\(CP\) .*/fficonfig\.h .*$#\tfficonfig="\$\$(find \$(PKG_BUILD_DIR) -name fficonfig.h -print -quit)"; [ -z "\$\$fficonfig" ] || \$(CP) "\$\$fficonfig" \$(1)/usr/include/#m' "${libffi_makefile}"
             if grep -Fq '$(GNU_TARGET_NAME)*/fficonfig.h' "${libffi_makefile}"; then
               echo "libffi fficonfig.h lookup was not patched"
               sed -n '70,85p' "${libffi_makefile}"
@@ -410,6 +410,14 @@ jobs:
               exit 1
             }
           done
+
+      - name: Compile fallback tools and toolchain
+        if: ${{ steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' && steps.released-toolchain.outputs.release_toolchain_hit != 'true' }}
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -o pipefail
+          nproc
+          make -j"$(nproc)" tools/install toolchain/install || make -j1 V=s tools/install toolchain/install
 
       - name: Compile required LuCI packages
         if: ${{ matrix.shard == 0 }}
@@ -542,6 +550,7 @@ jobs:
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.check-upstream.outputs.release_tag }}
         run: |
           set -eux
@@ -553,6 +562,6 @@ jobs:
             gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber
           else
             gh release create "${RELEASE_TAG}" "${assets[@]}" \
-              --title "路由器固件 ${build_time}" \
+              --title "packages ${build_time}" \
               --notes "XR1710G package shard build for ${{ needs.check-upstream.outputs.openwrt_ref }} ${{ needs.check-upstream.outputs.source_short }}"
           fi
