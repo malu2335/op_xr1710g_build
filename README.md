@@ -12,14 +12,15 @@ The default build source is:
 ## Usage
 
 1. Push this repository to GitHub.
-2. Push to the `main` branch to start the first test build automatically.
+2. Push to the `main` branch to start the first toolchain build automatically.
 3. Open `Actions`.
-4. Run `Build OpenWrt XR1710G` manually later if you want to override inputs.
-5. Download the `openwrt-xr1710g-*` artifact after the build completes.
+4. After the toolchain succeeds, the firmware and package workflows run automatically.
+5. Run `Build OpenWrt XR1710G` manually later if you want to override inputs.
+6. Download the `openwrt-xr1710g-*` artifact after the build completes.
 
-The firmware workflow also runs once per day to check the configured OpenWrt branch. Scheduled runs skip the expensive build when the current upstream commit already has a matching release tag. Successful firmware builds publish a GitHub Release containing firmware files and a `openwrt-xr1710g-packages.tar.zst` package archive.
+Successful firmware builds publish a GitHub Release containing firmware files and the exported OpenWrt `.config`.
 
-A separate toolchain workflow runs once per week. It builds the OpenWrt host tools and target toolchain, saves them into the GitHub Actions cache, and uploads a `openwrt-xr1710g-toolchain-*.tar.zst` archive to a GitHub Release. Firmware builds first try to restore that toolchain from cache, then from the matching toolchain release, and fall back to a normal build when no prebuilt toolchain is available.
+A separate toolchain workflow runs once per week, on repository dispatch, and after build workflow changes. It builds the OpenWrt host tools and target toolchain, saves them into the GitHub Actions cache, and uploads a profile-specific `openwrt-xr1710g-toolchain-*.tar.zst` archive to a GitHub Release. Automatic firmware and package builds run only after a successful toolchain build and first try to restore the matching toolchain from cache, then from the matching toolchain release. Manual firmware/package runs still attempt a normal OpenWrt build when no prebuilt toolchain is available.
 
 Packages are built by a separate matrix workflow. It splits real OpenWrt package Makefiles across shards so one GitHub-hosted runner job does not have to compile every package before the six-hour job limit.
 
@@ -42,7 +43,7 @@ The expected system firmware artifact is the `*-sysupgrade.itb` file. For XR1710
 - OpenWrt dependency warnings from package Makefiles are expected when all packages are scanned. The actual failure signal is a later `ERROR` or failed workflow step.
 - The workflow adds a first-boot wireless defaults script that sets a valid country code, defaulting to `CN`.
 - The 5 GHz radio is optionally pinned to channel `36` on first boot to avoid DFS startup delays and client discovery issues.
-- U-Boot chainloader images are separate from this system firmware workflow. Do not flash raw U-Boot artifacts as XR1710G system firmware.
+- U-Boot chainloader images are separate from this system firmware workflow. The workflow removes the `chainload-uboot.itb` artifact from the XR1710G system firmware profile, because it needs a separately built U-Boot binary. Do not flash raw U-Boot artifacts as XR1710G system firmware.
 
 ## References
 

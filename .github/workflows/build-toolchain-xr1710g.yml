@@ -103,6 +103,10 @@ jobs:
           source_short="$(git -C "${SOURCE_DIR}" rev-parse --short=12 HEAD)"
           safe_ref="$(printf '%s' "${OPENWRT_REF}" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//;s/-$//')"
           cache_week="$(date -u +%G-W%V)"
+          target_profile="${TARGET_PROFILE}"
+          case "${target_profile}" in
+            gemtek_xr1710g) target_profile="gemtek_xr1710g-ubi" ;;
+          esac
           if [ -z "${safe_ref}" ]; then
             safe_ref="${source_short}"
           fi
@@ -112,6 +116,7 @@ jobs:
             printf 'source_short=%s\n' "${source_short}"
             printf 'safe_ref=%s\n' "${safe_ref}"
             printf 'cache_week=%s\n' "${cache_week}"
+            printf 'target_profile=%s\n' "${target_profile}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Add XR1710G device support
@@ -169,7 +174,7 @@ jobs:
           grep -q '^define Device/gemtek_xr1710g-ubi$' "${image_file}"
           if awk '$0 == "define Device/gemtek_xr1710g-ubi" { show = 1 } show { print } $0 == "endef" && show { exit }' "${image_file}" | grep -Fq '$(Device/gemtek_17xx-common)'; then
             awk '$0 == "define Device/gemtek_xr1710g-ubi" { show = 1 } show { print } $0 == "endef" && show { exit }' "${image_file}"
-            grep -q 'ARTIFACT/chainload-uboot.itb := an7581-chainloader gemtek_xr1710g' "${image_file}"
+            echo "Using upstream Gemtek XR1710G package set."
             exit 0
           fi
           tmp_file="$(mktemp)"
@@ -219,6 +224,18 @@ jobs:
           sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}"
           grep -q -- '-kmod-pwm-airoha' "${image_file}"
           grep -q 'airoha-en7581-mt7996-npu-firmware' "${image_file}"
+
+      - name: Drop XR1710G chainloader artifact from system firmware profile
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          image_file="target/linux/airoha/image/an7581.mk"
+          sed -i '/^[[:space:]]*ARTIFACT\/chainload-uboot\.itb := an7581-chainloader gemtek_xr1710g$/d' "${image_file}"
+          sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}"
+          if sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}" | grep -q 'ARTIFACT/chainload-uboot.itb'; then
+            echo "XR1710G system firmware profile still contains a chainloader artifact."
+            exit 1
+          fi
 
       - name: Drop XR1710G AFE DTS override when base DTS lacks AFE
         working-directory: ${{ env.SOURCE_DIR }}
@@ -448,9 +465,9 @@ jobs:
             ${{ env.SOURCE_DIR }}/staging_dir/hostpkg
             ${{ env.SOURCE_DIR }}/staging_dir/toolchain-*
             ${{ env.SOURCE_DIR }}/build_dir/toolchain-*
-          key: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ env.TARGET_PROFILE }}-${{ steps.source.outputs.cache_week }}
+          key: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.target_profile }}-${{ steps.source.outputs.cache_week }}
           restore-keys: |
-            xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ env.TARGET_PROFILE }}-
+            xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.target_profile }}-
 
       - name: Compile tools and toolchain
         working-directory: ${{ env.SOURCE_DIR }}
@@ -464,7 +481,7 @@ jobs:
         run: |
           set -eux
           outdir="artifacts/toolchain"
-          archive="openwrt-xr1710g-toolchain-${TOOLCHAIN_CACHE_VERSION}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}.tar.zst"
+          archive="openwrt-xr1710g-toolchain-${TOOLCHAIN_CACHE_VERSION}-${{ steps.source.outputs.target_profile }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}.tar.zst"
           mkdir -p "${outdir}"
           cp -a "${SOURCE_DIR}/.config" "${outdir}/openwrt-xr1710g-toolchain.config"
 
@@ -491,7 +508,7 @@ jobs:
             echo "OpenWrt ref: ${OPENWRT_REF}"
             echo "OpenWrt commit: ${{ steps.source.outputs.source_commit }}"
             echo "Target: ${TARGET}/${SUBTARGET}"
-            echo "Profile: ${TARGET_PROFILE}"
+            echo "Profile: ${{ steps.source.outputs.target_profile }}"
             echo "Build type: toolchain"
             echo "Build time: $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %z')"
             echo
@@ -517,7 +534,7 @@ jobs:
         run: |
           set -eux
           build_time="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %z')"
-          tag="xr1710g-toolchain-${TOOLCHAIN_CACHE_VERSION}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}"
+          tag="xr1710g-toolchain-${TOOLCHAIN_CACHE_VERSION}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.target_profile }}-${{ steps.source.outputs.cache_week }}"
           if gh release view "${tag}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; skipping duplicate release."
             exit 0

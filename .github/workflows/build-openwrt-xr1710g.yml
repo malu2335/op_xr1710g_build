@@ -1,18 +1,11 @@
 name: Build OpenWrt XR1710G
 
 on:
-  schedule:
-    - cron: "17 18 * * *"
-  repository_dispatch:
+  workflow_run:
+    workflows:
+      - Build OpenWrt XR1710G Toolchain
     types:
-      - openwrt-updated
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/build-openwrt-xr1710g.yml
-      - .github/workflows/build-toolchain-xr1710g.yml
-      - README.md
+      - completed
   workflow_dispatch:
     inputs:
       openwrt_repo:
@@ -58,9 +51,20 @@ env:
   SUBTARGET: an7581
 
 jobs:
+  skip-unsuccessful-toolchain:
+    name: Skip firmware after unsuccessful toolchain
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
+    steps:
+      - name: Report skip
+        run: |
+          echo "Toolchain workflow ended with conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Firmware will run only after a successful toolchain build."
+
   check-upstream:
     name: Check OpenWrt source
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       should_build: ${{ steps.decision.outputs.should_build }}
       skip_reason: ${{ steps.decision.outputs.skip_reason }}
@@ -295,7 +299,7 @@ jobs:
           grep -q '^define Device/gemtek_xr1710g-ubi$' "${image_file}"
           if awk '$0 == "define Device/gemtek_xr1710g-ubi" { show = 1 } show { print } $0 == "endef" && show { exit }' "${image_file}" | grep -Fq '$(Device/gemtek_17xx-common)'; then
             awk '$0 == "define Device/gemtek_xr1710g-ubi" { show = 1 } show { print } $0 == "endef" && show { exit }' "${image_file}"
-            grep -q 'ARTIFACT/chainload-uboot.itb := an7581-chainloader gemtek_xr1710g' "${image_file}"
+            echo "Using upstream Gemtek XR1710G package set."
             exit 0
           fi
           tmp_file="$(mktemp)"
@@ -345,6 +349,18 @@ jobs:
           sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}"
           grep -q -- '-kmod-pwm-airoha' "${image_file}"
           grep -q 'airoha-en7581-mt7996-npu-firmware' "${image_file}"
+
+      - name: Drop XR1710G chainloader artifact from system firmware profile
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          image_file="target/linux/airoha/image/an7581.mk"
+          sed -i '/^[[:space:]]*ARTIFACT\/chainload-uboot\.itb := an7581-chainloader gemtek_xr1710g$/d' "${image_file}"
+          sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}"
+          if sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}" | grep -q 'ARTIFACT/chainload-uboot.itb'; then
+            echo "XR1710G system firmware profile still contains a chainloader artifact."
+            exit 1
+          fi
 
       - name: Drop XR1710G AFE DTS override when base DTS lacks AFE
         working-directory: ${{ env.SOURCE_DIR }}
@@ -525,7 +541,7 @@ jobs:
         if: ${{ steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-
+          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-${{ needs.check-upstream.outputs.target_profile }}-
         run: |
           set -eu
           mkdir -p toolchain-release
@@ -567,9 +583,20 @@ jobs:
             echo "Imported prebuilt toolchain from cache: ${CACHE_MATCHED_KEY:-exact key}"
           elif [ "${RELEASE_TOOLCHAIN_HIT}" = "true" ]; then
             echo "Imported prebuilt toolchain from release: ${RELEASE_TOOLCHAIN_TAG}"
+          elif [ "${GITHUB_EVENT_NAME}" = "workflow_run" ]; then
+            echo "No prebuilt toolchain was available after the toolchain workflow; automatic firmware build will stop."
           else
             echo "No prebuilt toolchain was available; continuing with normal OpenWrt build."
           fi
+
+      - name: Require prebuilt toolchain after toolchain workflow
+        if: ${{ github.event_name == 'workflow_run' && steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' && steps.released-toolchain.outputs.release_toolchain_hit != 'true' }}
+        run: |
+          echo "The toolchain workflow succeeded, but no matching toolchain cache or release was found."
+          echo "Expected profile: ${{ needs.check-upstream.outputs.target_profile }}"
+          echo "Expected source: ${{ needs.check-upstream.outputs.safe_ref }} / ${{ needs.check-upstream.outputs.source_short }}"
+          echo "Stopping here so the firmware job does not rebuild the toolchain and hit the binutils off64_t failure again."
+          exit 1
 
       - name: Update and install feeds
         working-directory: ${{ env.SOURCE_DIR }}

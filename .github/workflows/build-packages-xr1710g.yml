@@ -295,7 +295,7 @@ jobs:
           grep -q '^define Device/gemtek_xr1710g-ubi$' "${image_file}"
           if awk '$0 == "define Device/gemtek_xr1710g-ubi" { show = 1 } show { print } $0 == "endef" && show { exit }' "${image_file}" | grep -Fq '$(Device/gemtek_17xx-common)'; then
             awk '$0 == "define Device/gemtek_xr1710g-ubi" { show = 1 } show { print } $0 == "endef" && show { exit }' "${image_file}"
-            grep -q 'ARTIFACT/chainload-uboot.itb := an7581-chainloader gemtek_xr1710g' "${image_file}"
+            echo "Using upstream Gemtek XR1710G package set."
             exit 0
           fi
           tmp_file="$(mktemp)"
@@ -345,6 +345,18 @@ jobs:
           sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}"
           grep -q -- '-kmod-pwm-airoha' "${image_file}"
           grep -q 'airoha-en7581-mt7996-npu-firmware' "${image_file}"
+
+      - name: Drop XR1710G chainloader artifact from system firmware profile
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          image_file="target/linux/airoha/image/an7581.mk"
+          sed -i '/^[[:space:]]*ARTIFACT\/chainload-uboot\.itb := an7581-chainloader gemtek_xr1710g$/d' "${image_file}"
+          sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}"
+          if sed -n '/^define Device\/gemtek_xr1710g-ubi$/,/^endef$/p' "${image_file}" | grep -q 'ARTIFACT/chainload-uboot.itb'; then
+            echo "XR1710G system firmware profile still contains a chainloader artifact."
+            exit 1
+          fi
 
       - name: Drop XR1710G AFE DTS override when base DTS lacks AFE
         working-directory: ${{ env.SOURCE_DIR }}
@@ -526,7 +538,7 @@ jobs:
         if: ${{ steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-
+          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-${{ env.TARGET_PROFILE }}-
         run: |
           set -eu
           mkdir -p toolchain-release
@@ -555,6 +567,15 @@ jobs:
           echo "Imported released toolchain from ${tag}: ${archive}"
           echo "release_toolchain_hit=true" >> "$GITHUB_OUTPUT"
           echo "release_toolchain_tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Require prebuilt toolchain after toolchain workflow
+        if: ${{ github.event_name == 'workflow_run' && steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' && steps.released-toolchain.outputs.release_toolchain_hit != 'true' }}
+        run: |
+          echo "The toolchain workflow succeeded, but no matching toolchain cache or release was found."
+          echo "Expected profile: ${TARGET_PROFILE}"
+          echo "Expected source: ${SAFE_REF} / ${OPENWRT_SOURCE_SHORT}"
+          echo "Stopping here so package shards do not rebuild the toolchain independently."
+          exit 1
 
       - name: Update and install feeds
         working-directory: ${{ env.SOURCE_DIR }}
@@ -658,7 +679,7 @@ jobs:
           done
 
       - name: Compile fallback tools and toolchain
-        if: ${{ steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' && steps.released-toolchain.outputs.release_toolchain_hit != 'true' }}
+        if: ${{ github.event_name != 'workflow_run' && steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' && steps.released-toolchain.outputs.release_toolchain_hit != 'true' }}
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
           set -o pipefail
