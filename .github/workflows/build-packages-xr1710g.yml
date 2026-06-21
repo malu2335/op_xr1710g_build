@@ -273,8 +273,12 @@ jobs:
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
           set -eux
-          kernel_config="target/linux/airoha/config-6.6"
-          test -f "${kernel_config}"
+          kernel_config="$(
+            find "target/linux/${TARGET}/${SUBTARGET}" -maxdepth 1 -type f -name 'config-*' \
+              | sort -V \
+              | tail -n 1
+          )"
+          test -n "${kernel_config}"
           if ! grep -Eq '^(CONFIG_SND_SOC_AN7581=|# CONFIG_SND_SOC_AN7581 is not set)' "${kernel_config}"; then
             printf '\n# CONFIG_SND_SOC_AN7581 is not set\n' >> "${kernel_config}"
           fi
@@ -573,7 +577,7 @@ jobs:
     needs:
       - check-upstream
       - package-shards
-    if: ${{ always() && needs.check-upstream.outputs.should_build == 'true' && needs.check-upstream.outputs.create_release == 'true' }}
+    if: ${{ needs.package-shards.result == 'success' && needs.check-upstream.outputs.should_build == 'true' && needs.check-upstream.outputs.create_release == 'true' }}
     steps:
       - name: Download package shard artifacts
         uses: actions/download-artifact@v4
@@ -590,9 +594,13 @@ jobs:
         run: |
           set -eux
           build_time="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %z')"
-          find release-packages -type f -printf '%p\n' | sort > release-assets.txt
+          find release-packages -type f -printf '%p\n' 2>/dev/null | sort > release-assets.txt
 
           mapfile -t assets < release-assets.txt
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No package shard assets were downloaded; skipping release upload."
+            exit 0
+          fi
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" "${assets[@]}" --clobber
           else
