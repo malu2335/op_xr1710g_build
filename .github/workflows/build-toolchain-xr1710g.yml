@@ -137,6 +137,60 @@ jobs:
 
           grep -q '^define Device/econet_xr1710g-ubi$' target/linux/airoha/image/an7581.mk
 
+      - name: Apply XR1710G reference device package overrides
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          image_file="target/linux/airoha/image/an7581.mk"
+          grep -q '^define Device/econet_xr1710g-ubi$' "${image_file}"
+          tmp_file="$(mktemp)"
+          awk '
+            function print_xr1710g_packages() {
+              print "  DEVICE_PACKAGES := -airoha-en7581-npu-firmware \\"
+              print "                    -kmod-input-gpio-keys-polled -kmod-leds-pwm \\"
+              print "                    -kmod-pwm-airoha \\"
+              print "                    airoha-en7581-mt7996-npu-firmware \\"
+              print "                    fitblk kmod-i2c-an7581 kmod-hwmon-nct7802 \\"
+              print "                    kmod-mt7996-firmware kmod-phy-realtek \\"
+              print "                    rtl8261n-firmware \\"
+              print "                    wpad-openssl"
+            }
+            /^define Device\/econet_xr1710g-ubi$/ {
+              in_device = 1
+              saw_packages = 0
+              print
+              next
+            }
+            in_device && /^endef$/ {
+              if (!saw_packages) {
+                print_xr1710g_packages()
+              }
+              in_device = 0
+              skip_continuation = 0
+              print
+              next
+            }
+            in_device && skip_continuation {
+              if ($0 !~ /\\$/) {
+                skip_continuation = 0
+              }
+              next
+            }
+            in_device && /^[[:space:]]*DEVICE_PACKAGES[[:space:]]*:=/ {
+              print_xr1710g_packages()
+              saw_packages = 1
+              if ($0 ~ /\\$/) {
+                skip_continuation = 1
+              }
+              next
+            }
+            { print }
+          ' "${image_file}" > "${tmp_file}"
+          mv "${tmp_file}" "${image_file}"
+          sed -n '/^define Device\/econet_xr1710g-ubi$/,/^endef$/p' "${image_file}"
+          grep -q -- '-kmod-pwm-airoha' "${image_file}"
+          grep -q 'airoha-en7581-mt7996-npu-firmware' "${image_file}"
+
       - name: Add Airoha offload sk_buff kernel patch
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
@@ -288,40 +342,6 @@ jobs:
             grep -n -A2 -B2 'fficonfig.h' "${libffi_makefile}"
           fi
 
-      - name: Add OpenClash package
-        working-directory: ${{ env.SOURCE_DIR }}
-        run: |
-          set -eux
-          if [ ! -d package/OpenClash ]; then
-            git clone --depth 1 https://github.com/vernesong/OpenClash.git package/OpenClash
-          fi
-
-      - name: Add MLO LuCI package
-        working-directory: ${{ env.SOURCE_DIR }}
-        run: |
-          set -eux
-          if [ ! -d package/luci-app-mlo ]; then
-            git clone --depth 1 https://github.com/YYH2913/luci-app-mlo.git package/luci-app-mlo
-          fi
-
-      - name: Add Airoha NPU LuCI package
-        working-directory: ${{ env.SOURCE_DIR }}
-        run: |
-          set -eux
-          if [ ! -d package/luci-app-airoha-npu ]; then
-            git clone --depth 1 https://github.com/rchen14b/luci-app-airoha-npu.git package/luci-app-airoha-npu
-          fi
-          sed -i 's#^include \.\./\.\./luci\.mk#include $(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-airoha-npu/Makefile
-
-      - name: Add W1700K fancontrol package
-        working-directory: ${{ env.SOURCE_DIR }}
-        run: |
-          set -eux
-          if [ ! -d package/luci-app-w1700k-fancontrol ]; then
-            git clone --depth 1 https://github.com/rchen14b/luci-app-w1700k-fancontrol.git package/luci-app-w1700k-fancontrol
-          fi
-          sed -i 's#^include \.\./\.\./luci\.mk#include $(TOPDIR)/feeds/luci/luci.mk#' package/luci-app-w1700k-fancontrol/Makefile
-
       - name: Write toolchain build config
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
@@ -332,9 +352,6 @@ jobs:
           CONFIG_TARGET_${TARGET}=y
           CONFIG_TARGET_${TARGET}_${SUBTARGET}=y
           CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_${profile}=y
-          CONFIG_ALL=y
-          CONFIG_ALL_KMODS=y
-          CONFIG_ALL_NONSHARED=y
           CONFIG_BUILDBOT=y
           CONFIG_CCACHE=y
           CONFIG_DEVEL=y
@@ -342,30 +359,8 @@ jobs:
           CONFIG_JSON_OVERVIEW_IMAGE_INFO=y
           CONFIG_KERNEL_BUILD_DOMAIN="github-actions"
           CONFIG_KERNEL_BUILD_USER="builder"
+          CONFIG_MAKE_TOOLCHAIN=y
           CONFIG_SDK=y
-          # CONFIG_PACKAGE_dnsmasq is not set
-          CONFIG_PACKAGE_bash=y
-          CONFIG_PACKAGE_ca-bundle=y
-          CONFIG_PACKAGE_irqbalance=y
-          CONFIG_PACKAGE_jq=y
-          CONFIG_PACKAGE_curl=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-app-airoha-npu=y
-          CONFIG_PACKAGE_luci-app-openclash=y
-          CONFIG_PACKAGE_luci-app-firewall=y
-          CONFIG_PACKAGE_luci-app-mlo=y
-          CONFIG_PACKAGE_luci-app-package-manager=y
-          CONFIG_PACKAGE_luci-app-ttyd=y
-          CONFIG_PACKAGE_luci-app-irqbalance=y
-          CONFIG_PACKAGE_luci-app-w1700k-fancontrol=y
-          CONFIG_PACKAGE_luci-compat=y
-          CONFIG_PACKAGE_luci-proto-ipv6=y
-          CONFIG_PACKAGE_luci-proto-ppp=y
-          CONFIG_PACKAGE_luci-theme-bootstrap=y
-          CONFIG_PACKAGE_nano=y
-          CONFIG_PACKAGE_dnsmasq-full=y
-          CONFIG_PACKAGE_ttyd=y
-          CONFIG_PACKAGE_wireless-regdb=y
           # CONFIG_TARGET_ROOTFS_INITRAMFS is not set
           EOF
 
@@ -380,12 +375,6 @@ jobs:
             grep "^CONFIG_TARGET_${TARGET}_${SUBTARGET}_DEVICE_" .config || true
             exit 1
           }
-          for pkg in luci-app-openclash luci-app-mlo luci-app-airoha-npu luci-app-w1700k-fancontrol; do
-            grep -q "^CONFIG_PACKAGE_${pkg}=y$" .config || {
-              echo "Required package was not selected by OpenWrt Kconfig: ${pkg}"
-              exit 1
-            }
-          done
 
       - name: Restore weekly toolchain cache
         uses: actions/cache@v4

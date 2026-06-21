@@ -263,6 +263,60 @@ jobs:
 
           grep -q '^define Device/econet_xr1710g-ubi$' target/linux/airoha/image/an7581.mk
 
+      - name: Apply XR1710G reference device package overrides
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          set -eux
+          image_file="target/linux/airoha/image/an7581.mk"
+          grep -q '^define Device/econet_xr1710g-ubi$' "${image_file}"
+          tmp_file="$(mktemp)"
+          awk '
+            function print_xr1710g_packages() {
+              print "  DEVICE_PACKAGES := -airoha-en7581-npu-firmware \\"
+              print "                    -kmod-input-gpio-keys-polled -kmod-leds-pwm \\"
+              print "                    -kmod-pwm-airoha \\"
+              print "                    airoha-en7581-mt7996-npu-firmware \\"
+              print "                    fitblk kmod-i2c-an7581 kmod-hwmon-nct7802 \\"
+              print "                    kmod-mt7996-firmware kmod-phy-realtek \\"
+              print "                    rtl8261n-firmware \\"
+              print "                    wpad-openssl"
+            }
+            /^define Device\/econet_xr1710g-ubi$/ {
+              in_device = 1
+              saw_packages = 0
+              print
+              next
+            }
+            in_device && /^endef$/ {
+              if (!saw_packages) {
+                print_xr1710g_packages()
+              }
+              in_device = 0
+              skip_continuation = 0
+              print
+              next
+            }
+            in_device && skip_continuation {
+              if ($0 !~ /\\$/) {
+                skip_continuation = 0
+              }
+              next
+            }
+            in_device && /^[[:space:]]*DEVICE_PACKAGES[[:space:]]*:=/ {
+              print_xr1710g_packages()
+              saw_packages = 1
+              if ($0 ~ /\\$/) {
+                skip_continuation = 1
+              }
+              next
+            }
+            { print }
+          ' "${image_file}" > "${tmp_file}"
+          mv "${tmp_file}" "${image_file}"
+          sed -n '/^define Device\/econet_xr1710g-ubi$/,/^endef$/p' "${image_file}"
+          grep -q -- '-kmod-pwm-airoha' "${image_file}"
+          grep -q 'airoha-en7581-mt7996-npu-firmware' "${image_file}"
+
       - name: Add Airoha offload sk_buff kernel patch
         working-directory: ${{ env.SOURCE_DIR }}
         run: |
