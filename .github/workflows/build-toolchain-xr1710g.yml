@@ -50,6 +50,7 @@ env:
   CREATE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.create_release) || 'true' }}
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_MAXSIZE: 2G
+  TOOLCHAIN_CACHE_VERSION: v2
 
 jobs:
   toolchain:
@@ -384,9 +385,9 @@ jobs:
             ${{ env.SOURCE_DIR }}/staging_dir/hostpkg
             ${{ env.SOURCE_DIR }}/staging_dir/toolchain-*
             ${{ env.SOURCE_DIR }}/build_dir/toolchain-*
-          key: xr1710g-toolchain-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ env.TARGET_PROFILE }}-${{ steps.source.outputs.cache_week }}
+          key: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ env.TARGET_PROFILE }}-${{ steps.source.outputs.cache_week }}
           restore-keys: |
-            xr1710g-toolchain-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ env.TARGET_PROFILE }}-
+            xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ env.TARGET_PROFILE }}-
 
       - name: Compile tools and toolchain
         working-directory: ${{ env.SOURCE_DIR }}
@@ -400,7 +401,7 @@ jobs:
         run: |
           set -eux
           outdir="artifacts/toolchain"
-          archive="openwrt-xr1710g-toolchain-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}.tar.zst"
+          archive="openwrt-xr1710g-toolchain-${TOOLCHAIN_CACHE_VERSION}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}.tar.zst"
           mkdir -p "${outdir}"
           cp -a "${SOURCE_DIR}/.config" "${outdir}/openwrt-xr1710g-toolchain.config"
 
@@ -453,7 +454,7 @@ jobs:
         run: |
           set -eux
           build_time="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %z')"
-          tag="xr1710g-toolchain-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}"
+          tag="xr1710g-toolchain-${TOOLCHAIN_CACHE_VERSION}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.cache_week }}"
           if gh release view "${tag}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; skipping duplicate release."
             exit 0

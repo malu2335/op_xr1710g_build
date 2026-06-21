@@ -197,6 +197,7 @@ jobs:
       CREATE_RELEASE: ${{ needs.check-upstream.outputs.create_release }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 2G
+      TOOLCHAIN_CACHE_VERSION: v2
 
     steps:
       - name: Checkout this repository
@@ -455,16 +456,16 @@ jobs:
             ${{ env.SOURCE_DIR }}/staging_dir/hostpkg
             ${{ env.SOURCE_DIR }}/staging_dir/toolchain-*
             ${{ env.SOURCE_DIR }}/build_dir/toolchain-*
-          key: xr1710g-toolchain-${{ runner.os }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-${{ needs.check-upstream.outputs.target_profile }}-${{ needs.check-upstream.outputs.cache_week }}
+          key: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-${{ needs.check-upstream.outputs.target_profile }}-${{ needs.check-upstream.outputs.cache_week }}
           restore-keys: |
-            xr1710g-toolchain-${{ runner.os }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-${{ needs.check-upstream.outputs.target_profile }}-
+            xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-${{ needs.check-upstream.outputs.target_profile }}-
 
       - name: Import released toolchain when cache is unavailable
         id: released-toolchain
         if: ${{ steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-
+          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ needs.check-upstream.outputs.safe_ref }}-${{ needs.check-upstream.outputs.source_short }}-
         run: |
           set -eu
           mkdir -p toolchain-release

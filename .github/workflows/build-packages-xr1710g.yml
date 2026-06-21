@@ -187,6 +187,7 @@ jobs:
       EXTRA_CONFIG: ${{ needs.check-upstream.outputs.extra_config }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 2G
+      TOOLCHAIN_CACHE_VERSION: v2
 
     steps:
       - name: Checkout this repository
@@ -446,16 +447,16 @@ jobs:
             ${{ env.SOURCE_DIR }}/staging_dir/hostpkg
             ${{ env.SOURCE_DIR }}/staging_dir/toolchain-*
             ${{ env.SOURCE_DIR }}/build_dir/toolchain-*
-          key: xr1710g-toolchain-${{ runner.os }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-${{ env.TARGET_PROFILE }}-${{ env.CACHE_WEEK }}
+          key: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-${{ env.TARGET_PROFILE }}-${{ env.CACHE_WEEK }}
           restore-keys: |
-            xr1710g-toolchain-${{ runner.os }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-${{ env.TARGET_PROFILE }}-
+            xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-${{ env.TARGET_PROFILE }}-
 
       - name: Import released toolchain when cache is unavailable
         id: released-toolchain
         if: ${{ steps.toolchain-cache.outputs.cache-hit != 'true' && steps.toolchain-cache.outputs.cache-matched-key == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-
+          TOOLCHAIN_TAG_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ env.SAFE_REF }}-${{ env.OPENWRT_SOURCE_SHORT }}-
         run: |
           set -eu
           mkdir -p toolchain-release
