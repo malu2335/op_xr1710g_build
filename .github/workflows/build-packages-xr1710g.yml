@@ -1,11 +1,11 @@
 name: Build OpenWrt XR1710G Packages
 
 on:
-  schedule:
-    - cron: "27 19 * * *"
-  repository_dispatch:
+  workflow_run:
+    workflows:
+      - Build OpenWrt XR1710G Toolchain
     types:
-      - openwrt-updated
+      - completed
   workflow_dispatch:
     inputs:
       openwrt_repo:
@@ -47,9 +47,20 @@ env:
   SUBTARGET: an7581
 
 jobs:
+  skip-unsuccessful-toolchain:
+    name: Skip packages after unsuccessful toolchain
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
+    steps:
+      - name: Report skip
+        run: |
+          echo "Toolchain workflow ended with conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Packages will run only after a successful toolchain build."
+
   check-upstream:
     name: Check OpenWrt source
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       should_build: ${{ steps.decision.outputs.should_build }}
       skip_reason: ${{ steps.decision.outputs.skip_reason }}

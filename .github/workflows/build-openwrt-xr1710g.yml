@@ -11,6 +11,7 @@ on:
       - main
     paths:
       - .github/workflows/build-openwrt-xr1710g.yml
+      - .github/workflows/build-toolchain-xr1710g.yml
       - README.md
   workflow_dispatch:
     inputs:

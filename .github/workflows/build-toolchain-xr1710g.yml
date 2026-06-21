@@ -3,11 +3,16 @@ name: Build OpenWrt XR1710G Toolchain
 on:
   schedule:
     - cron: "47 18 * * 0"
+  repository_dispatch:
+    types:
+      - openwrt-updated
   push:
     branches:
       - main
     paths:
+      - .github/workflows/build-openwrt-xr1710g.yml
       - .github/workflows/build-toolchain-xr1710g.yml
+      - README.md
   workflow_dispatch:
     inputs:
       openwrt_repo:
@@ -43,11 +48,11 @@ env:
   SOURCE_DIR: openwrt
   TARGET: airoha
   SUBTARGET: an7581
-  OPENWRT_REPO: ${{ inputs.openwrt_repo || 'https://github.com/immortalwrt/immortalwrt.git' }}
-  OPENWRT_REF: ${{ inputs.openwrt_ref || 'openwrt-24.10' }}
-  TARGET_PROFILE: ${{ inputs.target_profile || 'econet_xr1710g-ubi' }}
-  EXTRA_CONFIG: ${{ inputs.extra_config || '' }}
-  CREATE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.create_release) || 'true' }}
+  OPENWRT_REPO: ${{ inputs.openwrt_repo || github.event.client_payload.openwrt_repo || 'https://github.com/immortalwrt/immortalwrt.git' }}
+  OPENWRT_REF: ${{ inputs.openwrt_ref || github.event.client_payload.openwrt_ref || 'openwrt-24.10' }}
+  TARGET_PROFILE: ${{ inputs.target_profile || github.event.client_payload.target_profile || 'econet_xr1710g-ubi' }}
+  EXTRA_CONFIG: ${{ inputs.extra_config || github.event.client_payload.extra_config || '' }}
+  CREATE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.create_release) || github.event_name == 'repository_dispatch' && format('{0}', github.event.client_payload.create_release) || 'true' }}
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_MAXSIZE: 2G
   TOOLCHAIN_CACHE_VERSION: v2
