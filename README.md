@@ -20,7 +20,7 @@ The default build source is:
 
 Successful firmware builds publish a GitHub Release containing firmware files and the exported OpenWrt `.config`.
 
-A separate toolchain workflow runs once per week, on repository dispatch, and after build workflow changes. It builds the OpenWrt host tools and target toolchain, saves them into the GitHub Actions cache, and uploads a profile-specific `openwrt-xr1710g-toolchain-*.tar.zst` archive to a GitHub Release. Automatic firmware and package builds run only after a successful toolchain build and first try to restore the matching toolchain from cache, then from the matching toolchain release. Manual firmware/package runs still attempt a normal OpenWrt build when no prebuilt toolchain is available.
+A separate toolchain workflow runs once per week, on repository dispatch, and after build workflow changes. It deletes matching old Actions cache keys at the start of the next toolchain run, then builds the OpenWrt host tools and target toolchain, saves the fresh toolchain into Actions cache, and uploads a profile-specific `openwrt-xr1710g-toolchain-*.tar.zst` archive to a GitHub Release. Automatic firmware and package builds run only after a successful toolchain build and first try to restore the matching toolchain from cache, then from the matching toolchain release. Manual firmware/package runs still attempt a normal OpenWrt build when no prebuilt toolchain is available.
 
 Packages are built by a separate matrix workflow. It splits real OpenWrt package Makefiles across shards so one GitHub-hosted runner job does not have to compile every package before the six-hour job limit.
 
@@ -39,6 +39,7 @@ The expected system firmware artifact is the `*-sysupgrade.itb` file. For XR1710
 - Airoha NPU LuCI is added from <https://github.com/rchen14b/luci-app-airoha-npu>.
 - W1700K fan control is added from <https://github.com/rchen14b/luci-app-w1700k-fancontrol>.
 - Firmware release titles use `路由器固件 <build time>`. Toolchain release titles use `toolchain <build time>`.
+- After uploading Release assets, workflows clean local release staging directories. Toolchain cache files are retained until the next toolchain workflow run begins.
 - `actions/cache` cache misses and Node runtime deprecation messages are runner warnings, not build failures.
 - OpenWrt dependency warnings from package Makefiles are expected when all packages are scanned. The actual failure signal is a later `ERROR` or failed workflow step.
 - The workflow adds a first-boot wireless defaults script that sets a valid country code, defaulting to `CN`.

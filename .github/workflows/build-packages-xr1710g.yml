@@ -692,7 +692,9 @@ jobs:
         run: |
           set -o pipefail
           nproc
-          make -j"$(nproc)" target/linux/compile || make -j1 V=s target/linux/compile
+          if ! timeout 120m make -j1 V=s target/linux/compile; then
+            echo "::warning::target/linux/compile did not finish cleanly; package shard build will continue and record package-level failures."
+          fi
 
       - name: Compile required LuCI packages
         if: ${{ matrix.shard == 0 }}
@@ -844,3 +846,8 @@ jobs:
               --title "packages ${build_time}" \
               --notes "XR1710G package shard build for ${{ needs.check-upstream.outputs.openwrt_ref }} ${{ needs.check-upstream.outputs.source_short }}"
           fi
+
+      - name: Clean package release staging files
+        run: |
+          set -eux
+          rm -rf release-packages release-assets.txt

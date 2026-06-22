@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: openwrt-xr1710g-toolchain
@@ -457,7 +458,22 @@ jobs:
             exit 1
           }
 
+      - name: Delete previous toolchain caches before rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TOOLCHAIN_CACHE_PREFIX: xr1710g-toolchain-${{ env.TOOLCHAIN_CACHE_VERSION }}-${{ runner.os }}-${{ steps.source.outputs.safe_ref }}-${{ steps.source.outputs.source_short }}-${{ steps.source.outputs.target_profile }}-
+        run: |
+          set -eux
+          mapfile -t cache_keys < <(gh cache list --limit 100 --json key --jq '.[].key' | grep -F "${TOOLCHAIN_CACHE_PREFIX}" || true)
+          for cache_key in "${cache_keys[@]}"; do
+            case "${cache_key}" in
+              "${TOOLCHAIN_CACHE_PREFIX}"*) gh cache delete "${cache_key}" || true ;;
+            esac
+          done
+
       - name: Restore weekly toolchain cache
+        id: toolchain-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -542,3 +558,9 @@ jobs:
           gh release create "${tag}" artifacts/toolchain/* \
             --title "toolchain ${build_time}" \
             --notes-file artifacts/toolchain/BUILDINFO-toolchain.txt
+
+      - name: Clean toolchain release staging files
+        if: ${{ env.CREATE_RELEASE == 'true' }}
+        run: |
+          set -eux
+          rm -rf artifacts/toolchain

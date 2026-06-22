@@ -838,3 +838,11 @@ jobs:
           gh release create "${tag}" artifacts/xr1710g/* \
             --title "路由器固件 ${build_time}" \
             --notes-file artifacts/xr1710g/BUILDINFO.txt
+
+      - name: Clean firmware release staging files
+        if: ${{ env.CREATE_RELEASE == 'true' }}
+        run: |
+          set -eux
+          rm -rf \
+            artifacts/xr1710g \
+            toolchain-release
